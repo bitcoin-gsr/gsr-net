@@ -111,6 +111,14 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+    def reply(self, status: int, message: str, txid: str = "") -> None:
+        """Answer a claim as JSON to JSON requests and as the HTML page otherwise."""
+        if "application/json" in self.headers.get("Content-Type", ""):
+            body = {"txid": txid, "amount": AMOUNT} if txid else {"error": message}
+            self.respond(status, json.dumps(body).encode() + b"\n", "application/json")
+        else:
+            self.respond(status, page(message, bool(txid)))
+
     def do_GET(self) -> None:
         if self.path.rstrip("/") == "/healthz":
             self.respond(200, b"ok\n", "text/plain; charset=utf-8")
@@ -128,7 +136,7 @@ class Handler(BaseHTTPRequestHandler):
         except ValueError:
             length = 0
         if length <= 0 or length > 4096:
-            self.respond(400, page("Invalid request."))
+            self.reply(400, "Invalid request.")
             return
         content_type = self.headers.get("Content-Type", "")
         body = self.rfile.read(length).decode("utf-8", "replace")
@@ -140,7 +148,7 @@ class Handler(BaseHTTPRequestHandler):
         else:
             address = parse_qs(body).get("address", [""])[0].strip()
         if not address or len(address) > 100:
-            self.respond(400, page("Enter a valid gsr-net address."))
+            self.reply(400, "Enter a valid gsr-net address.")
             return
 
         try:
@@ -148,7 +156,7 @@ class Handler(BaseHTTPRequestHandler):
             if not validation.get("isvalid"):
                 raise ValueError("invalid address")
         except (RuntimeError, ValueError, json.JSONDecodeError):
-            self.respond(400, page("That is not a valid Signet address."))
+            self.reply(400, "That is not a valid Signet address.")
             return
 
         now = time.time()
@@ -160,12 +168,12 @@ class Handler(BaseHTTPRequestHandler):
             last = max(float(addresses.get(address, 0)), float(ips.get(ip, 0)))
             remaining = int(COOLDOWN - (now - last))
             if remaining > 0:
-                self.respond(429, page(f"Please wait about {(remaining + 59) // 60} minutes before requesting again."))
+                self.reply(429, f"Please wait about {(remaining + 59) // 60} minutes before requesting again.")
                 return
             try:
                 txid = rpc("sendtoaddress", address, AMOUNT, "gsr-net faucet")
             except RuntimeError as error:
-                self.respond(503, page(f"Faucet payment failed: {error}"))
+                self.reply(503, f"Faucet payment failed: {error}")
                 return
             addresses[address] = now
             ips[ip] = now
@@ -173,7 +181,7 @@ class Handler(BaseHTTPRequestHandler):
             state["addresses"] = {key: value for key, value in addresses.items() if float(value) >= cutoff}
             state["ips"] = {key: value for key, value in ips.items() if float(value) >= cutoff}
             save_state(state)
-        self.respond(200, page(f"Sent {AMOUNT} BTC. Transaction: {txid}", True))
+        self.reply(200, f"Sent {AMOUNT} BTC. Transaction: {txid}", txid)
 
     def log_message(self, message: str, *args: object) -> None:
         print(f"{self.client_ip()} - {message % args}", flush=True)
