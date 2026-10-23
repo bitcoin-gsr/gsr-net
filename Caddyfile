@@ -1,0 +1,13 @@
+# The plain-HTTP IP address is a fallback for resolvers that block sslip.io
+# as a DNS rebinding protection.
+gsr-net.204-168-231-217.sslip.io, http://204.168.231.217 {
+    encode zstd gzip
+
+    handle_path /faucet* {
+        reverse_proxy 127.0.0.1:8081
+    }
+
+    handle {
+        reverse_proxy 127.0.0.1:8080
+    }
+}

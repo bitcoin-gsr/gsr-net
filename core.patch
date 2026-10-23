@@ -1,0 +1,49 @@
+From 3b98f8c97346c7af6af974eccc97f3d7cfff2169 Mon Sep 17 00:00:00 2001
+From: Julian Moik <julianmoik@gmail.com>
+Date: Fri, 23 Oct 2026 12:05:18 +0200
+Subject: [PATCH] signet: target 30-second blocks for gsr-net
+
+gsr-net is a custom signet with a block every 30 seconds. Set the signet
+target spacing to 30 seconds and the retarget timespan to 2016 blocks at
+that spacing, so difficulty stays at the minimum when the miner keeps the
+schedule. The signet miner's default interval follows.
+
+This applies to every signet run with this build, including the default
+public signet, which such builds cannot follow.
+---
+ contrib/signet/miner       | 4 +++-
+ src/kernel/chainparams.cpp | 6 ++++--
+ 2 files changed, 7 insertions(+), 3 deletions(-)
+
+diff --git a/contrib/signet/miner b/contrib/signet/miner
+index 5827e4b37a..0e456297cf 100755
+--- a/contrib/signet/miner
++++ b/contrib/signet/miner
+@@ -248,7 +248,9 @@ def trivial_challenge(spkhex):
+     return False
+ 
+ class Generate:
+-    INTERVAL = 600.0*2016/2015 # 10 minutes, adjusted for the off-by-one bug
++    # gsr-net targets 30-second blocks, adjusted for the historical retarget
++    # off-by-one behavior in the same way as the upstream 10-minute default.
++    INTERVAL = 30.0*2016/2015
+ 
+ 
+     def __init__(self, multiminer=None, ultimate_target=None, poisson=False, max_interval=1800,
+diff --git a/src/kernel/chainparams.cpp b/src/kernel/chainparams.cpp
+index 89675b3dac..a0cbb31f96 100644
+--- a/src/kernel/chainparams.cpp
++++ b/src/kernel/chainparams.cpp
+@@ -531,8 +531,10 @@ public:
+         consensus.BIP66Height = 1;
+         consensus.CSVHeight = 1;
+         consensus.SegwitHeight = 1;
+-        consensus.nPowTargetTimespan = 14 * 24 * 60 * 60; // two weeks
+-        consensus.nPowTargetSpacing = 10 * 60;
++        // gsr-net targets 30-second blocks and keeps Bitcoin's 2016-block
++        // difficulty adjustment interval (roughly 16.8 hours at target).
++        consensus.nPowTargetTimespan = 2016 * 30;
++        consensus.nPowTargetSpacing = 30;
+         consensus.fPowAllowMinDifficultyBlocks = false;
+         consensus.enforce_BIP94 = false;
+         consensus.fPowNoRetargeting = false;
